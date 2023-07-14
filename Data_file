@@ -1,0 +1,97 @@
+-- 1. Which team has won the maximum gold medals over the years?
+
+SELECT TOP 1 B.team, COUNT(DISTINCT A.event) AS Gold_medals  
+FROM athlete_event A 
+INNER JOIN athlete B ON A.athlete_id = B.id
+WHERE A.medal = 'Gold'
+GROUP BY B.team
+ORDER BY Gold_medals DESC;
+
+-- 2. For each team, print the total silver medals and the year in which they won the maximum silver medals. Output 3 columns: team, total_silver_medals, year_of_max_silver
+
+WITH cte AS (
+  SELECT B.team, A.year, COUNT(DISTINCT A.event) AS silver_medals,
+  RANK() OVER(PARTITION BY B.team ORDER BY COUNT(DISTINCT A.event) DESC) AS RK 
+  FROM athlete_event A 
+  INNER JOIN athlete B ON A.athlete_id = B.id
+  WHERE A.medal = 'Silver' 
+  GROUP BY B.team, A.year
+)
+SELECT team, SUM(silver_medals) AS total_silver_medals, MAX(CASE WHEN RK = 1 THEN year END) AS year_of_max_silver
+FROM cte
+GROUP BY team;
+
+-- 3. Which player has won the maximum gold medals among the players who have won only gold medals (never won silver or bronze) over the years?
+
+WITH cte AS (
+  SELECT B.name, COUNT(1) AS No_of_goldmedals 
+  FROM athlete_event A 
+  INNER JOIN athlete B ON A.athlete_id = B.id
+  WHERE A.medal = 'Gold'
+  GROUP BY B.name
+)
+SELECT TOP 1 name, No_of_goldmedals 
+FROM cte
+WHERE name NOT IN (SELECT DISTINCT name FROM athlete_event WHERE medal IN ('Silver', 'Bronze'))
+ORDER BY No_of_goldmedals DESC;
+
+-- 4. In each year, which player has won the maximum gold medals? Write a query to print year, player name, and the number of golds won in that year. In case of a tie, print comma-separated player names.
+
+WITH cte AS (
+  SELECT A.year, B.name, COUNT(1) AS No_of_goldmedals 
+  FROM athlete_event A 
+  INNER JOIN athlete B ON A.athlete_id = B.id
+  WHERE A.medal = 'Gold'
+  GROUP BY A.year, B.name
+)
+SELECT year, No_of_goldmedals, STRING_AGG(name, ',') AS players 
+FROM (
+  SELECT *, RANK() OVER(PARTITION BY year ORDER BY No_of_goldmedals DESC) AS RK
+  FROM cte
+) AS a
+WHERE RK = 1
+GROUP BY year, No_of_goldmedals;
+
+-- 5. In which event and year did India win its first gold, first silver, and first bronze medal? Print 3 columns: medal, year, sport.
+
+WITH cte AS (
+  SELECT A.medal, A.year, A.event, COUNT(DISTINCT A.event) AS Sport 
+  FROM athlete_event A 
+  INNER JOIN athlete B ON A.athlete_id = B.id
+  WHERE B.team = 'India' AND A.medal IN ('Gold', 'Silver', 'Bronze')
+  GROUP BY A.medal, A.year, A.event
+)
+SELECT medal, year, event 
+FROM cte
+WHERE RANK() OVER (PARTITION BY medal ORDER BY year ASC) = 1;
+
+-- 6. Find players who won a gold medal in both the summer and winter Olympics.
+
+SELECT B.name, COUNT(DISTINCT A.season) AS Gold_medals  
+FROM athlete_event A 
+INNER JOIN athlete B ON A.athlete_id = B.id
+WHERE A.medal = 'Gold' AND A.season IN ('Summer', 'Winter')
+GROUP BY B.name
+HAVING COUNT(DISTINCT A.season) = 2;
+
+-- 7. Find players who have won gold, silver, and bronze medals in a single Olympics. Print player name along with the year.
+
+SELECT B.name, A.year  
+FROM athlete_event A 
+INNER JOIN athlete B ON A.athlete_id = B.id
+WHERE A.medal IN ('Gold', 'Silver', 'Bronze')
+GROUP BY B.name, A.year
+HAVING COUNT(DISTINCT A.medal) = 3
+ORDER BY B.name ASC;
+
+-- 8. Find players who have won gold medals in consecutive 3 summer Olympics in the same event. Consider only Olympics from 2000 onwards. Print player name and event name.
+
+WITH cte AS (
+  SELECT B.name, A.year, A.event  
+  FROM athlete_event A 
+  INNER JOIN athlete B ON A.athlete_id = B.id
+  WHERE A.year >= 2000 AND A.season = 'Summer' AND A.medal = 'Gold'
+)
+SELECT * 
+FROM cte AS a
+WHERE year = a.year - 4 AND year = a.year + 4;
